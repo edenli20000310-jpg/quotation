@@ -2,37 +2,164 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <title>HTML 另存成 PDF</title>
+  <title>本機端 - 雲端 Excel 轉 PDF 工具</title>
   <style>
-    /* 設定列印時隱藏不需要的 UI 元件 */
-    @media print {
-      .no-print {
-        display: none !important;
-      }
-      body {
-        margin: 0;
-        padding: 0;
-      }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      padding: 20px;
+      margin: 0;
+      background-color: #f8f9fa;
+      color: #333;
     }
-    .btn {
-      padding: 10px 18px;
-      background-color: #28a745;
+    .container { max-width: 1100px; margin: 0 auto; }
+    .card {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .form-group {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    label { font-weight: bold; }
+    select {
+      padding: 10px 14px;
+      font-size: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      min-width: 280px;
+      outline: none;
+    }
+    .btn-pdf {
+      padding: 10px 20px;
+      font-size: 15px;
+      font-weight: bold;
       color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
+      background-color: #1a73e8;
+      border-radius: 6px;
+      text-decoration: none;
+      display: none;
+      transition: background-color 0.2s;
+    }
+    .btn-pdf:hover { background-color: #1557b0; }
+    .loading { color: #666; font-size: 14px; }
+    iframe {
+      width: 100%;
+      height: 680px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      background-color: #ffffff;
+      display: none;
     }
   </style>
 </head>
 <body>
 
-  <!-- 按鈕：點擊後呼叫瀏覽器列印功能 -->
-  <div class="no-print" style="margin-bottom: 20px;">
-    <button class="btn" onclick="window.print()">另存為 PDF / 列印網頁</button>
+  <div class="container">
+    <div class="card">
+      <h2>📁 雲端硬碟 Excel 轉 PDF (Local 版)</h2>
+      
+      <div class="form-group">
+        <label for="fileSelect">請選擇檔案：</label>
+        <select id="fileSelect" onchange="onFileSelected()">
+          <option value="">-- 載入資料夾檔案中... --</option>
+        </select>
+
+        <!-- 另存 / 下載成 PDF 按鈕 -->
+        <a id="downloadPdfBtn" class="btn-pdf" target="_blank">
+          📄 另存 / 下載成 PDF
+        </a>
+
+        <span id="statusMsg" class="loading"></span>
+      </div>
+    </div>
+
+    <!-- 網頁內嵌預覽區塊 -->
+    <iframe id="previewFrame"></iframe>
   </div>
 
-  <!-- 內嵌雲端試算表 -->
-  <iframe src="https://docs.google.com/spreadsheets/d/1qfdqQwuWzyhY4JQKSjD5z0-hWFS-E1u9dtMxPUIsgGg/edit?usp=sharing" width="100%" height="700px" frameborder="0"></iframe>
+  <script>
+    // ⚠️ 請在此處貼上您從 Apps Script 部署取得的 Web App URL
+    const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxlZh5azACkv_0lGHDzSi4_a5OLMy0kHl0FPsrNqujQ3_ta27QaIFlzRipLCop05zRb/exec';
 
+    // 網頁載入時呼叫 Apps Script API 取得檔案清單
+    window.onload = function() {
+      fetchFileList();
+    };
+
+    function fetchFileList() {
+      const statusMsg = document.getElementById('statusMsg');
+      statusMsg.innerText = '⏳ 正在讀取雲端資料夾檔案...';
+
+      // 透過 fetch 讀取 Google Apps Script Web App
+      fetch(GAS_WEB_APP_URL)
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            populateDropdown(data.files);
+            statusMsg.innerText = '';
+          } else {
+            statusMsg.innerText = '⚠️ 讀取失敗：' + data.message;
+          }
+        })
+        .catch(error => {
+          statusMsg.innerText = '⚠️ 連線錯誤：' + error;
+        });
+    }
+
+    // 將檔案清單渲染到 <select> 選單
+    function populateDropdown(files) {
+      const select = document.getElementById('fileSelect');
+      
+      if (files.length === 0) {
+        select.innerHTML = '<option value="">-- 資料夾內無 Excel / 試算表檔案 --</option>';
+        return;
+      }
+
+      select.innerHTML = '<option value="">-- 請選擇一個檔案 --</option>';
+      files.forEach(file => {
+        const option = document.createElement('option');
+        option.value = file.id;
+        option.textContent = file.name;
+        select.appendChild(option);
+      });
+    }
+
+    // 當選取檔案時觸發
+    function onFileSelected() {
+      const fileId = document.getElementById('fileSelect').value;
+      const downloadBtn = document.getElementById('downloadPdfBtn');
+      const previewFrame = document.getElementById('previewFrame');
+
+      if (!fileId) {
+        downloadBtn.style.display = 'none';
+        previewFrame.style.display = 'none';
+        return;
+      }
+
+      // 1. 組裝 Google 導出 API (另存 PDF 網址)
+      const pdfOptions = [
+        'format=pdf',        // 格式 PDF
+        'portrait=false',    // 橫向 (false) / 直向 (true)
+        'size=a4',           // A4 紙張
+        'fitw=true',         // 縮放符合頁寬
+        'gridlines=true'    // 顯示網格線
+      ].join('&');
+
+      const pdfUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?${pdfOptions}`;
+      
+      // 2. 更新按鈕與 iframe 預覽
+      downloadBtn.href = pdfUrl;
+      downloadBtn.style.display = 'inline-block';
+
+      previewFrame.src = `https://docs.google.com/spreadsheets/d/${fileId}/pubhtml?widget=true&headers=false`;
+      previewFrame.style.display = 'block';
+    }
+  </script>
 </body>
 </html>
