@@ -1,1 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>HTML 另存成 PDF</title>
+  <style>
+    /* 設定列印時隱藏不需要的 UI 元件 */
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    }
+    .btn {
+      padding: 10px 18px;
+      background-color: #28a745;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
 
+  <!-- 按鈕：點擊後呼叫瀏覽器列印功能 -->
+  <div class="no-print" style="margin-bottom: 20px;">
+    <button class="btn" onclick="window.print()">另存為 PDF / 列印網頁</button>
+  </div>
+
+  <!-- 內嵌雲端試算表 -->
+  <iframe src="https://docs.google.com/spreadsheets/d/1qfdqQwuWzyhY4JQKSjD5z0-hWFS-E1u9dtMxPUIsgGg/edit?usp=sharing" width="100%" height="700px" frameborder="0"></iframe>
+
+</body>
+</html>
